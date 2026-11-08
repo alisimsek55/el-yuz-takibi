@@ -1,0 +1,7 @@
+# mediapipe, opencv-contrib-python'u (cv2) kendisi kurar.
+# Ayrıca opencv-python kurmayın: iki paket aynı cv2 modülünü paylaşır ve çakışır.
+mediapipe==1.2.2
+numpy>=2.0
+pillow>=11.0
+ttkbootstrap>=2.2,<3
+pytest>=8.0

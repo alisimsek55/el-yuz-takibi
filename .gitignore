@@ -1,0 +1,19 @@
+# Sanal ortam
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# MediaPipe model dosyaları (python -m src.models ile indirilir)
+models/
+*.task
+*.part
+
+# Editör / işletim sistemi
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
