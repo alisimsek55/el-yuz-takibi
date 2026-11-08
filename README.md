@@ -4,9 +4,7 @@ Python, OpenCV ve MediaPipe ile web kamerasından **gerçek zamanlı el ve yüz 
 
 > **English summary:** A desktop app that tracks hand and face landmarks from a webcam in real time using OpenCV and the MediaPipe Tasks API (HandLandmarker + FaceLandmarker). The ttkbootstrap GUI lets you start/stop the camera, toggle hand and face tracking independently, and shows live hand/face counts and FPS. Detection runs on a background thread so the UI stays responsive. Setup: create a venv, `pip install -r requirements.txt`, `python -m src.models` to download the models, then `python -m src.app`.
 
-<!-- Ekran görüntüsünü docs/ekran-goruntusu.png olarak ekleyip aşağıdaki satırı açın:
-![Ekran görüntüsü](docs/ekran-goruntusu.png)
--->
+![Uygulamanın ekran görüntüsü: el iskeleti, yüz konturları ve anlık sayaçlar](docs/ekran-goruntusu.png)
 
 ## Özellikler
 
