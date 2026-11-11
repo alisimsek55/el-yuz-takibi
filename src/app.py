@@ -15,6 +15,7 @@ os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
 import threading
 import time
 import tkinter as tk
+import traceback
 from dataclasses import dataclass
 
 import cv2
@@ -74,14 +75,15 @@ class TrackingWorker(threading.Thread):
 
     def run(self) -> None:
         fps = FPSCounter()
-        start = time.perf_counter()
         try:
             self.camera.open()
             while not self.stop_event.is_set():
                 frame = self.camera.read()
                 if self.settings["mirror"]:
                     frame = cv2.flip(frame, 1)
-                ts = int((time.perf_counter() - start) * 1000)
+                # Mutlak monoton saat: tracker yeniden başlatmalar arasında
+                # paylaşıldığı için oturum başına sıfırlanan sayaç kullanılmaz.
+                ts = time.monotonic_ns() // 1_000_000
                 det = self.tracker.process(frame, ts, hands=self.settings["hands"],
                                            faces=self.settings["faces"])
                 det.draw(frame)
@@ -92,6 +94,9 @@ class TrackingWorker(threading.Thread):
                     self._latest = FrameInfo(rgb, det.hand_count, det.face_count, current_fps)
         except CameraError as exc:
             self.error = str(exc)
+        except Exception as exc:  # MediaPipe/OpenCV hataları arayüzde görünsün
+            traceback.print_exc()
+            self.error = f"{type(exc).__name__}: {exc}"
         finally:
             self.camera.release()
 
@@ -101,6 +106,8 @@ class App(ttk.Window):
         super().__init__(title="El ve Yüz Takibi", themename="darkly", minsize=(1240, 620))
         self.tracker: Tracker | None = None
         self.worker: TrackingWorker | None = None
+        self._stopping: TrackingWorker | None = None  # durdurulmuş ama henüz bitmemiş iş
+        self._stop_message = ""
         self.settings = {"hands": True, "faces": True, "mirror": True}
         self._photo: ImageTk.PhotoImage | None = None
 
@@ -183,7 +190,11 @@ class App(ttk.Window):
         if self.tracker is None:
             self.status_var.set("Modeller yükleniyor...")
             self.update_idletasks()
-            self.tracker = Tracker()
+            try:
+                self.tracker = Tracker()
+            except Exception as exc:  # bozuk/uyumsuz model dosyası vb.
+                self.status_var.set(f"Modeller yüklenemedi: {type(exc).__name__}: {exc}")
+                return
         self._sync_settings()
         self.worker = TrackingWorker(Camera(camera_index), self.tracker, self.settings)
         self.worker.start()
@@ -192,21 +203,35 @@ class App(ttk.Window):
         self.status_var.set(f"Kamera {camera_index} açılıyor...")
 
     def stop(self, message: str = "Kamera durduruldu.") -> None:
-        if self.worker is None:
+        worker = self.worker
+        if worker is None:
             return
-        self.worker.stop_event.set()
-        self.worker.join(timeout=2)
+        worker.stop_event.set()
+        worker.join(timeout=2)
         self.worker = None
         self._photo = None
         self.video.configure(image="", text="Kamera kapalı")
         self.hand_count_var.set("0")
         self.face_count_var.set("0")
         self.fps_var.set("0.0")
-        self.start_btn.configure(state="normal")
         self.stop_btn.configure(state="disabled")
-        self.status_var.set(message)
+        if worker.is_alive():
+            # Kamera okuma veya tespit takıldı. İş parçacığı hâlâ kamerayı ve
+            # tracker'ı kullanıyor; bitene kadar yeniden başlatmaya izin verme.
+            self._stopping = worker
+            self._stop_message = message
+            self.start_btn.configure(state="disabled")
+            self.status_var.set("Kamera kapanıyor, lütfen bekleyin...")
+        else:
+            self.start_btn.configure(state="normal")
+            self.status_var.set(message)
 
     def _refresh(self) -> None:
+        stopping = self._stopping
+        if stopping is not None and not stopping.is_alive():
+            self._stopping = None
+            self.start_btn.configure(state="normal")
+            self.status_var.set(self._stop_message)
         worker = self.worker
         if worker is not None:
             if not worker.is_alive():
@@ -224,7 +249,9 @@ class App(ttk.Window):
 
     def on_close(self) -> None:
         self.stop()
-        if self.tracker is not None:
+        # Takılı bir iş parçacığı tracker'ı hâlâ kullanıyorsa altından kapatma;
+        # süreç kapanırken (daemon thread) kaynaklar zaten bırakılır.
+        if self.tracker is not None and self._stopping is None:
             self.tracker.close()
         self.destroy()
 

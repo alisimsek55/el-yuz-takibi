@@ -76,13 +76,18 @@ class Tracker:
                 num_hands=max_hands,
             )
         )
-        self._faces = vision.FaceLandmarker.create_from_options(
-            vision.FaceLandmarkerOptions(
-                base_options=BaseOptions(model_asset_path=str(face_model)),
-                running_mode=mode,
-                num_faces=max_faces,
+        try:
+            self._faces = vision.FaceLandmarker.create_from_options(
+                vision.FaceLandmarkerOptions(
+                    base_options=BaseOptions(model_asset_path=str(face_model)),
+                    running_mode=mode,
+                    num_faces=max_faces,
+                )
             )
-        )
+        except Exception:
+            # Yüz modeli yüklenemezse yarım kalan el modelini de kapat.
+            self._hands.close()
+            raise
         self._last_ts = -1
 
     def process(self, frame_bgr: np.ndarray, timestamp_ms: int,
